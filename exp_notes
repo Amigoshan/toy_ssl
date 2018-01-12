@@ -1,0 +1,23 @@
+ex1:
+
+  datanum = 100,labelnum = labelnum,epochnum = 100,hiddennum = hidden, lr = 0.01, batch = 10, lamb = lamb, thresh=0.0
+    for hidden in [100,500,2000]:
+        for labelnum in [10,20,30]:
+            for lamb in [0,0.001,0.01,0.1,1]:
+ex2:
+
+  batch=20, random input, 2pi
+    for hidden in [100,500,2000]:
+        for labelnum in [6,10,20]:
+            for lamb in [0,0.001,0.01,0.1]:
+                train(datanum = 100,labelnum = labelnum,epochnum = 100,hiddennum = hidden, lr = 0.01, batch = 20, lamb = lamb, thresh=0.0)    
+
+ex3:
+
+  hidden=500, labelnum=10
+    for alpha in [2,5,10,20]:
+        for thresh in [0.1,0.05,0.01,0.0]:
+            for lamb in [0,0.01,0.1,0.5]:
+                train(datanum = 100,labelnum = 10,epochnum = 100,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
+
+repeat ex3 on noisy data
