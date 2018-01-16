@@ -21,3 +21,11 @@ ex3:
                 train(datanum = 100,labelnum = 10,epochnum = 100,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
 
 repeat ex3 on noisy data
+
+ex6:
+different lr, batch and lambda
+selu - seem unstable, not improving
+larger unlabeled data number
+
+Find the bug!!!
+Have been using the wrong dataDist!!

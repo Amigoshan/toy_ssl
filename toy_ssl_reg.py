@@ -113,9 +113,9 @@ def groupPlot(datax, datay, group=10):
     return (datax, datay)
 
 
-def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, batch = 10, alpha=10, lamb=0.01, thresh = 0.1):
+def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, batch = 10, alpha=10, lamb=0.01, thresh = 0.1, slepoch=0):
 
-    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f' % (datanum, labelnum, 
+    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f_bugfree' % (datanum, labelnum, 
         hiddennum, lr, batch, alpha, lamb, thresh )
     if not isdir(logdir):
         mkdir(logdir)
@@ -124,7 +124,14 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     regnet.cuda()
     regnet.train()
     
-    (dataX, dataY, labelFlag, dataDist) = dataPrepare(datanum, labelnum, vis=False, noisestd=0)
+    (dataX_all, dataY_all, labelFlag_all, dataDist_all) = dataPrepare(datanum, labelnum, vis=False, noisestd=0)
+    labeled_selector = (labelFlag_all==1)
+    dataX_labeled, dataY_labeled, labelFlag_labeled, dataDist_labeled = \
+        dataX_all[labeled_selector], dataY_all[labeled_selector], labelFlag_all[labeled_selector], dataDist_all[labeled_selector]
+
+    # TODO:
+    dataX, dataY, labelFlag, dataDist = dataX_all, dataY_all, labelFlag_all, dataDist_all
+
 
     # training
     criterion = nn.L1Loss().cuda()
@@ -135,7 +142,13 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     lossplot = []
     loss_label_plot = []
     loss_unlabel_plot = []
-    for epoch in range(epochnum):
+    for epoch in range(epochnum+slepoch):
+
+        if epoch <slepoch:
+            lamb_use = 0
+            # dataX, dataY, labelFlag, dataDist = dataX_labeled, dataY_labeled, labelFlag_labeled, dataDist_labeled
+        else:
+            lamb_use = lamb
 
         running_loss = 0
         running_loss_label = 0
@@ -149,7 +162,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
 #            if labelFlag[dataind]==0:
 #                continue
 
-            (datax, datay, labelflag) = (dataX[dataind], dataY[dataind], labelFlag[dataind])
+            (datax, datay, labelflag, datadist) = (dataX[dataind], dataY[dataind], labelFlag[dataind], dataDist[dataind])
 
             if batch==1:
                 inputTensor = torch.Tensor([datax])
@@ -183,11 +196,11 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
             loss_unlabel = Variable(torch.Tensor([0])).cuda()
             for ind1 in range(batch-1):
                 for ind2 in range(ind1+1, batch):
-                    w = abs(dataDist[ind1] - dataDist[ind2])
+                    w = abs(datadist[ind1] - datadist[ind2])
                     loss_unlabel = loss_unlabel + ((output[ind1]-output[ind2]).abs()-thresh).clamp(0) * exp(-alpha*w)
 #                    print (output[ind1]-output[ind2]).abs().data
 
-            loss = loss_label + lamb * loss_unlabel
+            loss = loss_label + lamb_use * loss_unlabel
 
 
             running_loss += loss.data[0]
@@ -245,4 +258,4 @@ if __name__ == "__main__":
     #             train(datanum = 100,labelnum = 20,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
 
     # (dataX, dataY, labelFlag, dataDist) = dataPrepare(100, 10, vis=True, noisestd=0)
-    train(datanum = 500,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.001, batch = 50, alpha = 50, lamb = 0.01, thresh=0.05)
+    train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 20, lamb = 0.1, thresh=0.05)
