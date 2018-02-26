@@ -2,7 +2,7 @@ from os.path import join, isdir, isfile
 from os import listdir
 import numpy as np
 
-dirname = 'ex5'
+dirname = 'ex8'
 lossfile = 'loss_label.npy'
 
 minloss = 1000

@@ -115,7 +115,7 @@ def groupPlot(datax, datay, group=10):
 
 def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, batch = 10, alpha=10, lamb=0.01, thresh = 0.1, slepoch=0):
 
-    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f_bugfree' % (datanum, labelnum, 
+    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f_unlabelonly_slfirst' % (datanum, labelnum, 
         hiddennum, lr, batch, alpha, lamb, thresh )
     if not isdir(logdir):
         mkdir(logdir)
@@ -124,7 +124,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     regnet.cuda()
     regnet.train()
     
-    (dataX_all, dataY_all, labelFlag_all, dataDist_all) = dataPrepare(datanum, labelnum, vis=False, noisestd=0)
+    (dataX_all, dataY_all, labelFlag_all, dataDist_all) = dataPrepare(datanum, labelnum, vis=True, noisestd=0)
     labeled_selector = (labelFlag_all==1)
     dataX_labeled, dataY_labeled, labelFlag_labeled, dataDist_labeled = \
         dataX_all[labeled_selector], dataY_all[labeled_selector], labelFlag_all[labeled_selector], dataDist_all[labeled_selector]
@@ -193,11 +193,23 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
 
             # clear the loss of those unlabeled samples
             # this needs batch>1
+            # don't calculate the unlabeled loss for labeled data 
             loss_unlabel = Variable(torch.Tensor([0])).cuda()
             for ind1 in range(batch-1):
+                if labelflag[ind1]: # don't calculate the unlabeled loss for labeled data 
+                    output1 = datay[ind1]
+                else:
+                    output1 = output[ind1]
                 for ind2 in range(ind1+1, batch):
+                    if labelFlag[ind2]:  # don't calculate the unlabeled loss for labeled data 
+                        output2 = datay[ind2]
+                    else:
+                        output2 = output[ind2]
                     w = abs(datadist[ind1] - datadist[ind2])
-                    loss_unlabel = loss_unlabel + ((output[ind1]-output[ind2]).abs()-thresh).clamp(0) * exp(-alpha*w)
+                    outdiff = output1 - output2
+                    # import ipdb; ipdb.set_trace()
+                    if isinstance(outdiff, Variable):
+                        loss_unlabel = loss_unlabel + ((output1-output2).abs()-thresh).clamp(0) * exp(-alpha*w)
 #                    print (output[ind1]-output[ind2]).abs().data
 
             loss = loss_label + lamb_use * loss_unlabel
@@ -252,10 +264,13 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     np.save(join(logdir,'loss_unlabel'),loss_unlabel_plot)
 
 if __name__ == "__main__":
-    # for alpha in [5,10,20]:
+    # baseline 
+    # train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 10, lamb = 0.0, thresh=0.0)
+
+    # for alpha in [5,10,20,50]:
     #     for thresh in [0.1,0.05,0.01,0.0]:
-    #         for lamb in [0,0.01,0.1,0.5]:
-    #             train(datanum = 100,labelnum = 20,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
+    #         for lamb in [0.01,0.1,0.5]:
+    #             train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
 
     # (dataX, dataY, labelFlag, dataDist) = dataPrepare(100, 10, vis=True, noisestd=0)
-    train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 20, lamb = 0.1, thresh=0.05)
+    train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 20, lamb = 0.1, thresh=0.05, slepoch=100)
