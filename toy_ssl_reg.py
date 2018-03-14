@@ -66,8 +66,8 @@ def dataPrepare(datanum, labelnum, vis = False, seed = 37, noisestd = 0.1):
     RegDataX_noise = RegDataX_norm + noise
     
     if vis:
-        plt.plot(RegDataX_noise, RegDataY, '.b')
-        plt.plot(RegDataX_noise[labelInd], RegDataY[labelInd],'xr')
+        plt.plot(RegDataX_noise, RegDataY, '.b', ms=3)
+        plt.plot(RegDataX_noise[labelInd], RegDataY[labelInd],'xr', ms=6)
         plt.ylim(-1.5,1.5)
         plt.grid()
         plt.show()
@@ -113,10 +113,10 @@ def groupPlot(datax, datay, group=10):
     return (datax, datay)
 
 
-def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, batch = 10, alpha=10, lamb=0.01, thresh = 0.1, slepoch=0):
+def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, batch = 10, alpha=10, lamb=0.01, thresh = 0.1, slepoch=0, rep=0):
 
-    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f_unlabelonly_slfirst' % (datanum, labelnum, 
-        hiddennum, lr, batch, alpha, lamb, thresh )
+    logdir = 'data%d_label_%d_hidden_%d_lr%.5f_batch%d_alpha%d_lamb%.5f_thresh%.5f_iros_%d' % (datanum, labelnum, 
+        hiddennum, lr, batch, alpha, lamb, thresh, rep )
     if not isdir(logdir):
         mkdir(logdir)
 
@@ -124,7 +124,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     regnet.cuda()
     regnet.train()
     
-    (dataX_all, dataY_all, labelFlag_all, dataDist_all) = dataPrepare(datanum, labelnum, vis=True, noisestd=0)
+    (dataX_all, dataY_all, labelFlag_all, dataDist_all) = dataPrepare(datanum, labelnum, vis=False, noisestd=0)
     labeled_selector = (labelFlag_all==1)
     dataX_labeled, dataY_labeled, labelFlag_labeled, dataDist_labeled = \
         dataX_all[labeled_selector], dataY_all[labeled_selector], labelFlag_all[labeled_selector], dataDist_all[labeled_selector]
@@ -142,6 +142,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     lossplot = []
     loss_label_plot = []
     loss_unlabel_plot = []
+    loss_gt_plot = []
     for epoch in range(epochnum+slepoch):
 
         if epoch <slepoch:
@@ -153,6 +154,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
         running_loss = 0
         running_loss_label = 0
         running_loss_unlabel = 0
+        running_loss_gt = 0
         inputOrder = np.random.permutation(datanum) # random order
         # inputOrder = np.arange(datanum) # sequencial order
 
@@ -191,6 +193,7 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
             else: # no labeled data in this batch
                 loss_label = Variable(torch.Tensor([0])).cuda()
 
+            gt_loss = criterion(output, targetVariable.cuda())
             # clear the loss of those unlabeled samples
             # this needs batch>1
             # don't calculate the unlabeled loss for labeled data 
@@ -214,13 +217,14 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
 
             loss = loss_label + lamb_use * loss_unlabel
 
-
+            running_loss_gt += gt_loss.data[0]
             running_loss += loss.data[0]
             running_loss_label += loss_label.data[0]
             running_loss_unlabel += loss_unlabel.data[0]
             lossplot.append(loss.data[0])
             loss_label_plot.append(loss_label.data[0])
             loss_unlabel_plot.append(loss_unlabel.data[0])
+            loss_gt_plot.append(gt_loss.data[0])
             # print loss.data[0]
 
             loss.backward()
@@ -228,9 +232,9 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
 
 #        if (ind+batch) % (showiter*batch) == 0:    # print every 20 mini-batches
         timestr = time.strftime('%m/%d %H:%M:%S',time.localtime())
-        print(' [epoch-%d %d %s] loss: %.5f, loss_label: %.5f, loss_unlabel: %.5f ' %
+        print(' [epoch-%d %d %s] loss: %.5f, loss_label: %.5f, loss_unlabel: %.5f, loss_gt: %.5f ' %
         (epoch, ind+1, timestr, running_loss / showiter, 
-         running_loss_label / showiter, running_loss_unlabel / showiter))
+         running_loss_label / showiter, running_loss_unlabel / showiter, running_loss_gt/ showiter))
         # add to tensorboard
         # logger.scalar_summary('loss',running_loss/showiter,ind)
 
@@ -239,6 +243,12 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
         #   torch.save(posenet.state_dict(), paramName+'_'+str(ind)+'.pkl')
         #   # savemat(lossfilename+'.mat',{'loss':np.array(lossplot)})
         test(regnet, datanum = 937, cmpx = dataX[labelFlag==1], cmpy = dataY[labelFlag==1], logdir= logdir,epoch=epoch)
+
+    np.save(join(logdir,'loss'),lossplot)
+    np.save(join(logdir,'loss_label'),loss_label_plot)
+    np.save(join(logdir,'loss_unlabel'),loss_unlabel_plot)
+    np.save(join(logdir,'loss_gt'),loss_gt_plot)
+
 
     plt.hold(False)
     lossplot = groupPlot(range(len(lossplot)),lossplot)
@@ -259,9 +269,8 @@ def train(datanum, labelnum, epochnum, hiddennum = 100, lr=0.1, showiter=10, bat
     plt.grid()
     plt.savefig(join(logdir,'loss_unlabel.jpg'))
     # plt.show()
-    np.save(join(logdir,'loss'),lossplot)
-    np.save(join(logdir,'loss_label'),loss_label_plot)
-    np.save(join(logdir,'loss_unlabel'),loss_unlabel_plot)
+
+    torch.save(regnet.state_dict(), join(logdir,'regnet_'+str(ind)+'.pkl'))
 
 if __name__ == "__main__":
     # baseline 
@@ -273,4 +282,7 @@ if __name__ == "__main__":
     #             train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = alpha, lamb = lamb, thresh=thresh)    
 
     # (dataX, dataY, labelFlag, dataDist) = dataPrepare(100, 10, vis=True, noisestd=0)
-    train(datanum = 200,labelnum = 10,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 20, lamb = 0.1, thresh=0.05, slepoch=100)
+    
+    for rep in range(3):
+        for labelnum in [5,10,20,50,100]:
+            train(datanum = 200,labelnum = labelnum,epochnum = 500,hiddennum = 500, lr = 0.01, batch = 20, alpha = 20, lamb = 0, thresh=0.05, slepoch=0, rep=rep)
